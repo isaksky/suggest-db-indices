@@ -1,5 +1,5 @@
 # -*- encoding: utf-8 -*-
-require File.expand_path('../lib/hairball/version', __FILE__)
+require File.dirname(__FILE__) + 'lib/hairball/version'
 
 Gem::Specification.new do |gem|
   gem.authors       = ["Isak Sky"]
@@ -14,4 +14,6 @@ Gem::Specification.new do |gem|
   gem.name          = "hairball"
   gem.require_paths = ["lib"]
   gem.version       = Hairball::VERSION
+
+  spec.add_dependency('rails', '>= '3.0.0')
 end

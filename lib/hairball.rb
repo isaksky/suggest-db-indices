@@ -1,5 +1,5 @@
-require "hairball/version"
+require 'tempfile'
+require 'sql_parser'
 
-module Hairball
-  # Your code goes here...
-end
+require File.dirname(__FILE__) + '/hairball/version'
+require File.dirname(__FILE__) + '/hairball/core'
