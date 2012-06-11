@@ -1,6 +1,6 @@
 # Suggest-Db-Indices
 
-TODO: Write a gem description
+A gem for your rails project that suggests indices for you to add in your database.
 
 ## Installation
 
@@ -18,7 +18,9 @@ Or install it yourself as:
 
 ## Usage
 
-TODO: Write usage instructions here
+1. rails console
+2. require 'suggest_db_indices'
+3. SuggestDbIndices.go!
 
 ## Contributing
 

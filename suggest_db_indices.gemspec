@@ -4,8 +4,8 @@ require File.join File.dirname(__FILE__), 'lib/suggest_db_indices/version'
 Gem::Specification.new do |gem|
   gem.authors       = ["Isak Sky"]
   gem.email         = ["isak.sky@gmail.com"]
-  gem.description   = %q{TODO: Write a gem description}
-  gem.summary       = %q{TODO: Write a gem summary}
+  gem.description   = %q{Gem that }
+  gem.summary       = %q{hi}
   gem.homepage      = ""
 
   gem.files         = `git ls-files`.split($\)
@@ -13,7 +13,7 @@ Gem::Specification.new do |gem|
   gem.test_files    = gem.files.grep(%r{^(test|spec|features)/})
   gem.name          = "suggest-db-indices"
   gem.require_paths = ["lib"]
-  gem.version       = Suggest_Db_Indices::VERSION
+  gem.version       = SuggestDbIndices::VERSION
 
   gem.add_dependency('rails', '>= 3.0.0')
 end

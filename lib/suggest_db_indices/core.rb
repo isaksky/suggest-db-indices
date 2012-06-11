@@ -1,4 +1,4 @@
-module Suggest_Db_Indices
+module SuggestDbIndices
   class << self
     def indexed_columns_by_table
       @indexed_columns_by_table ||= connection.tables.reduce({}) do |h, table_name|
@@ -59,19 +59,27 @@ module Suggest_Db_Indices
           h.merge! k => v
         end
       end
-      add_indexes_string = unindexed_foreign_key_columns_by_table.reduce('') do |s, (table, columns)|
+      generate_migration_file! format_index_migration_string unindexed_foreign_key_columns_by_table
+    end
+
+    def format_index_migration_string columns_by_table
+      add_index_statements = columns_by_table.reduce('') do |s, (table, columns)|
         columns.each {|col| s += "    add_index :#{table}, :#{col}\n" }
         s
       end
+      "  def change\n#{add_index_statements}\n  end\nend"
+    end
+
+    def generate_migration_file! migration_contents
       _ , migration_file_path  = Rails::Generators.invoke("active_record:migration",
                                                           ["add_indexes_via_suggest_db_indices_#{rand(36**8).to_s(36)}",
                                                            'BoiledGoose:Animal'])
       file_contents = File.read migration_file_path
       search_string = "ActiveRecord::Migration"
       stop_index = (file_contents.index(search_string)) + search_string.length
-      new_file_contents = file_contents[0..stop_index] + "  def change\n#{add_indexes_string}\n  end\nend"
-
+      new_file_contents = file_contents[0..stop_index] + migration_contents
       File.open(migration_file_path, 'w') {|f| f.write(new_file_contents) }
+      migration_file_path
     end
 
     def default_options
@@ -90,6 +98,7 @@ module Suggest_Db_Indices
       log_file_names.each {|f| sh_dbg "tail -n #{NUM_LINES_TO_READ} #{f} >> #{tmpfile.path}" }
       puts "Stripping color codes!"
       stripped_log_file = Tempfile.new('stripped')
+      # Because text search is too tricky with colors
       strip_color_codes! tmpfile.path, stripped_log_file.path
       stripped_log_file
     end
@@ -107,7 +116,7 @@ module Suggest_Db_Indices
           table = matches[1]
 
           raw_where_clause = matches[2]
-          puts "Where: #{raw_where_clause}"
+#          puts "Where: #{raw_where_clause}"
 
           raw_where_clause.split.map do |s|
             s.gsub('`','')

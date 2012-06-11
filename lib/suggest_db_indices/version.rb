@@ -1,3 +1,3 @@
-module Suggest_Db_Indices
+module SuggestDbIndices
   VERSION = "0.0.1"
 end
