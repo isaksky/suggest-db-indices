@@ -1,6 +1,6 @@
 # Suggest-Db-Indices
 
-A gem for your rails project that suggests indices for you to add in your database.
+A gem for your rails project that suggests indices for you to add in your database. Currently it suggests adding indexes to unindexed foreign keys.
 
 ## Installation
 
@@ -29,3 +29,7 @@ Or install it yourself as:
 3. Commit your changes (`git commit -am 'Added some feature'`)
 4. Push to the branch (`git push origin my-new-feature`)
 5. Create new Pull Request
+
+## Possible future features
+1. I have built some things for analyzing the rails log files and looking at columns used in the queries that get run. I need to come up with a good way to use these results.
+2. Next to each add index statement, there should be a justification.
