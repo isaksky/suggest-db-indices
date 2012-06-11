@@ -4,9 +4,10 @@ require File.join File.dirname(__FILE__), 'lib/suggest_db_indices/version'
 Gem::Specification.new do |gem|
   gem.authors       = ["Isak Sky"]
   gem.email         = ["isak.sky@gmail.com"]
-  gem.description   = %q{Gem that }
-  gem.summary       = %q{hi}
-  gem.homepage      = ""
+  gem.description   = %q{A gem for your rails project that suggests indices for you to add in your database. Currently it suggests adding indexes to unindexed foreign keys.}
+  gem.summary       = %q{A gem for your rails project that suggests indices for you to add in your database.}
+  gem.homepage      = "https://github.com/isaksky/suggest-db-indices"
+  gem.license       = "MIT"
 
   gem.files         = `git ls-files`.split($\)
   gem.executables   = gem.files.grep(%r{^bin/}).map{ |f| File.basename(f) }
