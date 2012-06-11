@@ -1,4 +1,4 @@
-# Hairball
+# Suggest-Db-Indices
 
 TODO: Write a gem description
 
@@ -6,7 +6,7 @@ TODO: Write a gem description
 
 Add this line to your application's Gemfile:
 
-    gem 'hairball'
+    gem 'suggest-db-indices'
 
 And then execute:
 
@@ -14,7 +14,7 @@ And then execute:
 
 Or install it yourself as:
 
-    $ gem install hairball
+    $ gem install suggest-db-indices
 
 ## Usage
 
