@@ -1,6 +1,6 @@
 # Suggest-Db-Indices
 
-A gem for your rails project that suggests indices for you to add in your database. Currently it suggests adding indexes to unindexed foreign keys.
+A gem for your rails project that suggests indices for you to add in your database. Currently it suggests adding indices to unindexed foreign keys.
 
 ## Installation
 
