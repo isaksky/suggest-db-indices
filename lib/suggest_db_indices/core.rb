@@ -52,11 +52,11 @@ module SuggestDbIndices
     end
 
     def config
-      @config ||= default_options
+      @config ||= default_config
     end
 
     def go! config = {}
-      @config = config.reduce(default_options) {|h, (k,v)| h.merge k => v}
+      @config = config.reduce(default_config) {|h, (k,v)| h.merge k => v}
 
       generate_migration_file! format_index_migration_string unindexed_foreign_key_columns_by_table
     end
@@ -81,7 +81,7 @@ module SuggestDbIndices
       migration_file_path
     end
 
-    def default_options
+    def default_config
       {:num_lines_to_scan => 10000,
         :examine_logs => false,
         :log_dir => ""}
