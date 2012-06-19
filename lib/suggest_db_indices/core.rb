@@ -51,14 +51,13 @@ module SuggestDbIndices
       end
     end
 
+    def config
+      @config ||= default_options
+    end
+
     def go! config = {}
-      @config = default_options.reduce(config) do |h, (k,v)|
-        if h[k]
-          h
-        else
-          h.merge! k => v
-        end
-      end
+      @config = config.reduce(default_options) {|h, (k,v)| h.merge k => v}
+
       generate_migration_file! format_index_migration_string unindexed_foreign_key_columns_by_table
     end
 
