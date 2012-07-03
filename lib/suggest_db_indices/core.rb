@@ -85,9 +85,21 @@ module SuggestDbIndices
       "  def change\n#{add_index_statements}\n  end\nend"
     end
 
+    def name_migration_file
+      name = "add_indexes_via_suggest_db_indices"
+      existing_migration_files = Dir.glob File.join Rails.root, 'db', 'migrate/*.rb'
+
+      if existing_migration_files.any? {|f| f.end_with?("#{name}.rb") }
+        i = 1
+        i += 1 while existing_migration_files.any? {|f| f.end_with?("#{name}_#{i}.rb") }
+        name += "_#{i}"
+      end
+      name
+    end
+
     def generate_migration_file! migration_contents
       _ , migration_file_path  = Rails::Generators.invoke("active_record:migration",
-                                                          ["add_indexes_via_suggest_db_indices_#{rand(36**8).to_s(36)}",
+                                                          [name_migration_file,
                                                            'BoiledGoose:Animal'])  # Bogus param, doesn't matter since contents will be replaced
       file_contents = File.read migration_file_path
       search_string = "ActiveRecord::Migration"
