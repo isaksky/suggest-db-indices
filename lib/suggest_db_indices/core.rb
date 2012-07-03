@@ -58,7 +58,23 @@ module SuggestDbIndices
     def go! config = {}
       @config = config.reduce(default_config) {|h, (k,v)| h.merge k => v}
 
-      generate_migration_file! format_index_migration_string unindexed_foreign_key_columns_by_table
+      if @config[:mode] == :conservative
+        scan_result = scan_log_files_for_queried_columns @config[:log_dir]
+        columns_found_in_logs_by_table = scan_result[:queried_columns_by_table]
+        # In conservative mode, only add indexes for columns that are both unindexed foreign
+        # keys, and used in query as shown in log file.
+        columns_by_table = unindexed_foreign_key_columns_by_table.reduce({}) do |h, (table, columns)|
+          h.merge table => columns & columns_found_in_logs_by_table[table]
+        end
+      else
+        columns_by_table = unindexed_foreign_key_columns_by_table
+      end
+
+      if columns_by_table.any? {|(table, columns)| columns.any? }
+        generate_migration_file! format_index_migration_string columns_by_table
+      else
+        puts "No missing indexes found!"
+      end
     end
 
     def format_index_migration_string columns_by_table
@@ -72,19 +88,20 @@ module SuggestDbIndices
     def generate_migration_file! migration_contents
       _ , migration_file_path  = Rails::Generators.invoke("active_record:migration",
                                                           ["add_indexes_via_suggest_db_indices_#{rand(36**8).to_s(36)}",
-                                                           'BoiledGoose:Animal'])
+                                                           'BoiledGoose:Animal'])  # Bogus param, doesn't matter since contents will be replaced
       file_contents = File.read migration_file_path
       search_string = "ActiveRecord::Migration"
       stop_index = (file_contents.index(search_string)) + search_string.length
       new_file_contents = file_contents[0..stop_index] + migration_contents
       File.open(migration_file_path, 'w') {|f| f.write(new_file_contents) }
+      puts "Migration result: \n #{new_file_contents}"
       migration_file_path
     end
 
     def default_config
       {:num_lines_to_scan => 10000,
         :examine_logs => false,
-        :log_dir => ""}
+        :log_dir => File.join(Rails.root, 'log') }
     end
 
     def prepare_log_file! log_dir
@@ -94,57 +111,65 @@ module SuggestDbIndices
       puts "Found log files: #{log_file_names.inspect}"
 
       puts "Tailing each file!"
-      log_file_names.each {|f| sh_dbg "tail -n #{NUM_LINES_TO_READ} #{f} >> #{tmpfile.path}" }
-      puts "Stripping color codes!"
-      stripped_log_file = Tempfile.new('stripped')
-      # Because text search is too tricky with colors
-      strip_color_codes! tmpfile.path, stripped_log_file.path
-      stripped_log_file
+      log_file_names.each {|f| sh_dbg "tail -n #{config[:num_lines_to_scan]} #{f} >> #{tmpfile.path}" }
+      tmpfile
     end
 
-    def scan_log_files_for_queried_columns log_dir, non_pk_columns_by_table = non_pk_columns_by_table
+    def table_quote_char
+      @table_quote_char ||= connection.quote_table_name("boiled_goose")[0]
+    end
+
+    def column_quote_char
+      @column_quote_char ||= connection.quote_column_name("sauerkraut")[0]
+    end
+
+    # Scans log files for queried columns
+    def scan_log_files log_dir = config()[:log_dir]
       stripped_log_file = prepare_log_file! log_dir
 
-      queried_columns_by_table = hash_of_arrays
-      # For debugging: Record from which SQL statement we got each column
+      queried_columns_by_table = hash_of_hashes
+      # For debugging: Record from what table and columns we derived from each SQL statement
       inferred_table_columns_by_raw_where_clause = hash_of_sets
+      non_matches = Set.new
 
       while line = stripped_log_file.gets
         line = remove_limit_clause(line.strip)
-        if matches = /SELECT.+FROM\s\W?(\w+)\W?\sWHERE(.+)/i.match(line)
-          table = matches[1]
-
-          raw_where_clause = matches[2]
-#          puts "Where: #{raw_where_clause}"
-
-          raw_where_clause.split.map do |s|
-            s.gsub('`','')
-          end.reduce([]) do |memo, identifier| #TODO: Stop reducing to array, reduce to counter
-            if identifier.include?('.')
+        if matches = /SELECT.+WHERE(.+)/i.match(line)  #Old: /.+SELECT.+FROM\s\W?(\w+)\W?\sWHERE(.+)/
+          raw_where_clause = matches[1]
+          #          puts "Where: #{raw_where_clause}"
+          raw_where_clause.split.each do |identifier|
+            next if non_matches.include? identifier
+            # Go through the where clause to find columns that were queried
+            if identifier.include?('.') # e.g., "post"."user_id"
               current_table, column_candidate = identifier.split('.')
-            else
-              current_table, column_candidate = [table, identifier]
+              current_table.gsub! table_quote_char, ''
+              column_candidate.gsub! column_quote_char, ''
+              if non_pk_columns_by_table[current_table] && non_pk_columns_by_table[current_table].include?(column_candidate)
+                # We only care about the identifiers that match up to a table and column.
+                # This is a ghetto way to to avoid having to parse SQL (extremely difficult)
+                if queried_columns_by_table.get_in([current_table,column_candidate])
+                  queried_columns_by_table[current_table][column_candidate] += 1
+                else
+                  queried_columns_by_table[current_table] = {column_candidate => 1}
+                end
+                inferred_table_columns_by_raw_where_clause[raw_where_clause] << [current_table,column_candidate]
+              else
+                non_matches << identifier
+              end
             end
-
-            if non_pk_columns_by_table[current_table].include? column_candidate
-              # We only care about the identifiers that match up to a table and column.
-              # This is a ghetto way to to avoid having to parse SQL (extremely difficult)
-              memo << [current_table, column_candidate]
-            else
-              memo
-            end
-          end.each do |(table, column)|
-            queried_columns_by_table[table] << column
-            inferred_table_columns_by_raw_where_clause[raw_where_clause] << [table, column]
           end
         end
       end
       {:queried_columns_by_table => queried_columns_by_table,
-       :inferred_table_columns_by_raw_where_clause => inferred_table_columns_by_raw_where_clause}
+        :inferred_table_columns_by_raw_where_clause => inferred_table_columns_by_raw_where_clause}
     end
 
     def hash_of_arrays
       Hash.new {|h, k| h[k] = [] }
+    end
+
+    def hash_of_hashes
+      Hash.new {|h, k| h[k] = Hash.new }
     end
 
     def hash_of_sets
@@ -157,12 +182,6 @@ module SuggestDbIndices
       else
         return s
       end
-    end
-
-    def strip_color_codes! file_name, output_path
-      # From: http://serverfault.com/a/154200
-      sh_dbg 'sed "s/${esc}[^m]*m//g" ' + "#{file_name} >> #{output_path}"
-      raise "There was a problem stripping colors" unless $?.success?
     end
 
     def sh_dbg cmd
