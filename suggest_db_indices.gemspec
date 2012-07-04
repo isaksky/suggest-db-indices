@@ -17,4 +17,6 @@ Gem::Specification.new do |gem|
   gem.version       = SuggestDbIndices::VERSION
 
   gem.add_dependency('rails', '>= 3.0.0')
+  gem.add_development_dependency('awesome_print')
+  gem.add_development_dependency('pry')
 end
