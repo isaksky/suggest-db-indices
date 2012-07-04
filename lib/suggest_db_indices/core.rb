@@ -55,31 +55,48 @@ module SuggestDbIndices
       @config ||= default_config
     end
 
-    def go! config = {}
-      @config = config.reduce(default_config) {|h, (k,v)| h.merge k => v}
+    def go! opts = {}
+      @config = opts.reduce(default_config) { |h, (k, v)| h.merge k => v }
+      table_col_pair_attributes = hash_of_hashes
 
-      if @config[:mode] == :conservative
-        scan_result = scan_log_files_for_queried_columns @config[:log_dir]
-        columns_found_in_logs_by_table = scan_result[:queried_columns_by_table]
-        # In conservative mode, only add indexes for columns that are both unindexed foreign
-        # keys, and used in query as shown in log file.
-        columns_by_table = unindexed_foreign_key_columns_by_table.reduce({}) do |h, (table, columns)|
-          h.merge table => columns & columns_found_in_logs_by_table[table]
+      unindexed_foreign_key_columns_by_table.each do |table, cols|
+        cols.each do |col|
+          table_col_pair = [table, col]
+          table_col_pair_attributes[table_col_pair][:foreign_key_column] = true
         end
-      else
-        columns_by_table = unindexed_foreign_key_columns_by_table
       end
 
-      if columns_by_table.any? {|(table, columns)| columns.any? }
-        generate_migration_file! format_index_migration_string columns_by_table
+      scan_result = scan_log_files
+      columns_found_in_logs_count_by_table = scan_result[:queried_columns_by_table]
+      columns_found_in_logs_count_by_table.each do |table, column_hashes|
+        column_hashes.each do |col, found_count|
+          table_col_pair = [table, col]
+          table_col_pair_attributes[table_col_pair][:found_count] = found_count
+        end
+      end
+
+      table_col_pair_validator = @config[:mode] == :conservative \
+      ? lambda {|_, attributes| attributes[:foreign_key_column] && attributes[:found_count] }
+      : lambda {|_, attributes| attributes[:foreign_key_column] }
+
+      table_col_pairs_to_index_with_attributes =
+        table_col_pair_attributes.select &table_col_pair_validator
+
+      if table_col_pairs_to_index_with_attributes.any?
+        generate_migration_file! format_index_migration_string table_col_pairs_to_index_with_attributes
       else
         puts "No missing indexes found!"
       end
     end
 
-    def format_index_migration_string columns_by_table
-      add_index_statements = columns_by_table.reduce('') do |s, (table, columns)|
-        columns.each {|col| s += "    add_index :#{table}, :#{col}\n" }
+    def format_index_migration_string table_col_pairs_to_index_with_attributes
+      add_index_statements = table_col_pairs_to_index_with_attributes.reduce('') do |s, (table_col_pair, attributes)|
+        table, col = table_col_pair
+        s += "    add_index :#{table}, :#{col} #"
+        comments = []
+        comments << "foreign key" if attributes[:foreign_key_column]
+        comments << "found in queries #{attributes[:found_count]} times" if attributes[:found_count]
+        s += "#{comments.join(', ')}\n"
         s
       end
       "  def change\n#{add_index_statements}\n  end\nend"
@@ -89,23 +106,23 @@ module SuggestDbIndices
       name = "add_indexes_via_suggest_db_indices"
       existing_migration_files = Dir.glob File.join Rails.root, 'db', 'migrate/*.rb'
 
-      if existing_migration_files.any? {|f| f.end_with?("#{name}.rb") }
+      if existing_migration_files.any? { |f| f.end_with?("#{name}.rb") }
         i = 1
-        i += 1 while existing_migration_files.any? {|f| f.end_with?("#{name}_#{i}.rb") }
+        i += 1 while existing_migration_files.any? { |f| f.end_with?("#{name}_#{i}.rb") }
         name += "_#{i}"
       end
       name
     end
 
     def generate_migration_file! migration_contents
-      _ , migration_file_path  = Rails::Generators.invoke("active_record:migration",
-                                                          [name_migration_file,
-                                                           'BoiledGoose:Animal'])  # Bogus param, doesn't matter since contents will be replaced
+      _, migration_file_path = Rails::Generators.invoke("active_record:migration",
+                                                        [name_migration_file,
+                                                         'BoiledGoose:Animal']) # Bogus param, doesn't matter since contents will be replaced
       file_contents = File.read migration_file_path
       search_string = "ActiveRecord::Migration"
       stop_index = (file_contents.index(search_string)) + search_string.length
       new_file_contents = file_contents[0..stop_index] + migration_contents
-      File.open(migration_file_path, 'w') {|f| f.write(new_file_contents) }
+      File.open(migration_file_path, 'w') { |f| f.write(new_file_contents) }
       puts "Migration result: \n #{new_file_contents}"
       migration_file_path
     end
@@ -113,7 +130,7 @@ module SuggestDbIndices
     def default_config
       {:num_lines_to_scan => 10000,
         :examine_logs => false,
-        :log_dir => File.join(Rails.root, 'log') }
+        :log_dir => File.join(Rails.root, 'log')}
     end
 
     def prepare_log_file! log_dir
@@ -146,7 +163,7 @@ module SuggestDbIndices
 
       while line = stripped_log_file.gets
         line = remove_limit_clause(line.strip)
-        if matches = /SELECT.+WHERE(.+)/i.match(line)  #Old: /.+SELECT.+FROM\s\W?(\w+)\W?\sWHERE(.+)/
+        if matches = /SELECT.+WHERE(.+)/i.match(line) #Old: /.+SELECT.+FROM\s\W?(\w+)\W?\sWHERE(.+)/
           raw_where_clause = matches[1]
           #          puts "Where: #{raw_where_clause}"
           raw_where_clause.split.each do |identifier|
@@ -159,12 +176,12 @@ module SuggestDbIndices
               if non_pk_columns_by_table[current_table] && non_pk_columns_by_table[current_table].include?(column_candidate)
                 # We only care about the identifiers that match up to a table and column.
                 # This is a ghetto way to to avoid having to parse SQL (extremely difficult)
-                if queried_columns_by_table.get_in([current_table,column_candidate])
+                if queried_columns_by_table.get_in([current_table, column_candidate])
                   queried_columns_by_table[current_table][column_candidate] += 1
                 else
                   queried_columns_by_table[current_table] = {column_candidate => 1}
                 end
-                inferred_table_columns_by_raw_where_clause[raw_where_clause] << [current_table,column_candidate]
+                inferred_table_columns_by_raw_where_clause[raw_where_clause] << [current_table, column_candidate]
               else
                 non_matches << identifier
               end
@@ -177,15 +194,15 @@ module SuggestDbIndices
     end
 
     def hash_of_arrays
-      Hash.new {|h, k| h[k] = [] }
+      Hash.new { |h, k| h[k] = [] }
     end
 
     def hash_of_hashes
-      Hash.new {|h, k| h[k] = Hash.new }
+      Hash.new { |h, k| h[k] = Hash.new }
     end
 
     def hash_of_sets
-      Hash.new {|h, k| h[k] = Set.new }
+      Hash.new { |h, k| h[k] = Set.new }
     end
 
     def remove_limit_clause s
