@@ -4,7 +4,7 @@ module SuggestDbIndices
       @indexed_columns_by_table ||= connection.tables.reduce({}) do |h, table_name|
         # Note: can index on multiple columns, which complicates things.  Assuming user has done
         # this correctly for now...
-        h.merge table_name => connection.indexes(table_name).map {|index| index.columns}.flatten
+        h.merge table_name => connection.indexes(table_name).map { |index| index.columns }.flatten
       end
     end
 
@@ -47,7 +47,7 @@ module SuggestDbIndices
 
     def unindexed_foreign_key_columns_by_table
       unindexed_columns_by_table.reduce({}) do |h, (table, columns)|
-        h.merge table => columns.select {|col| foreign_key?(col) }
+        h.merge table => columns.select { |col| foreign_key?(col) }
       end
     end
 
@@ -76,11 +76,11 @@ module SuggestDbIndices
       end
 
       table_col_pair_validator = @config[:mode] == :conservative \
-      ? lambda {|_, attributes| attributes[:foreign_key_column] && attributes[:found_count] }
-      : lambda {|_, attributes| attributes[:foreign_key_column] }
+      ? lambda { |_, attributes| attributes[:foreign_key_column] && attributes[:found_count] }
+      : lambda { |_, attributes| attributes[:foreign_key_column] }
 
       table_col_pairs_to_index_with_attributes =
-        table_col_pair_attributes.select &table_col_pair_validator
+          table_col_pair_attributes.select &table_col_pair_validator
 
       if table_col_pairs_to_index_with_attributes.any?
         generate_migration_file! format_index_migration_string table_col_pairs_to_index_with_attributes
@@ -129,8 +129,8 @@ module SuggestDbIndices
 
     def default_config
       {:num_lines_to_scan => 10000,
-        :examine_logs => false,
-        :log_dir => File.join(Rails.root, 'log')}
+       :examine_logs => false,
+       :log_dir => File.join(Rails.root, 'log')}
     end
 
     def prepare_log_file! log_dir
@@ -140,7 +140,7 @@ module SuggestDbIndices
       puts "Found log files: #{log_file_names.inspect}"
 
       puts "Tailing each file!"
-      log_file_names.each {|f| sh_dbg "tail -n #{config[:num_lines_to_scan]} #{f} >> #{tmpfile.path}" }
+      log_file_names.each { |f| sh_dbg "tail -n #{config[:num_lines_to_scan]} #{f} >> #{tmpfile.path}" }
       tmpfile
     end
 
@@ -190,7 +190,7 @@ module SuggestDbIndices
         end
       end
       {:queried_columns_by_table => queried_columns_by_table,
-        :inferred_table_columns_by_raw_where_clause => inferred_table_columns_by_raw_where_clause}
+       :inferred_table_columns_by_raw_where_clause => inferred_table_columns_by_raw_where_clause}
     end
 
     def hash_of_arrays
