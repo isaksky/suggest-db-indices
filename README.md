@@ -35,5 +35,8 @@ or... index all foreign key columns that actually get queried (based on reading 
 ```ruby
     SuggestDbIndices.go! :mode => :conservative 
 ```    
+## Todo
+This tool should be a rake task.
+
 ## Changes
 0.0.3 (July 4, 2012) - Added justification for each index added, made log file handling more robust
