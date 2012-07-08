@@ -176,7 +176,7 @@ module SuggestDbIndices
               if non_pk_columns_by_table[current_table] && non_pk_columns_by_table[current_table].include?(column_candidate)
                 # We only care about the identifiers that match up to a table and column.
                 # This is a ghetto way to to avoid having to parse SQL (extremely difficult)
-                if queried_columns_by_table.get_in([current_table, column_candidate])
+                if Clojure.get_in queried_columns_by_table, [current_table, column_candidate]
                   queried_columns_by_table[current_table][column_candidate] += 1
                 else
                   queried_columns_by_table[current_table] = {column_candidate => 1}
