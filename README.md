@@ -18,4 +18,5 @@ And then execute:
 
 ## Changes
 0.1.0 (July 8, 2012) - Added the rake task.
+
 0.0.3 (July 4, 2012) - Added justification for each index added, made log file handling more robust
